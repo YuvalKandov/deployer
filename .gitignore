@@ -4,3 +4,20 @@ venv/
 __pycache__/
 *.pyc
 .pytest_cache/
+
+# Terraform
+.terraform/            # downloaded provider plugins — huge, machine-specific
+*.tfstate             # state file — plaintext, may hold secrets, NEVER commit
+*.tfstate.*           # state backups
+crash.log             # crash logs
+crash.*.log
+*.tfvars              # variable values — often secrets (an *.tfvars.example is safe to commit)
+*.tfvars.json
+override.tf           # local-only overrides
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraformrc          # CLI config
+terraform.rc
+# NOTE: .terraform.lock.hcl is intentionally NOT ignored — it pins provider
+# versions (like package-lock.json) and SHOULD be committed.
