@@ -14,5 +14,5 @@ terraform {
 }
 
 provider "aws" {
-  region = "eu-central-1" # Frankfurt. Hardcoded for now — becomes a variable in Step 4.
+  region = var.aws_region
 }

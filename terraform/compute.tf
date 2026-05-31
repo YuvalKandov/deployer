@@ -30,16 +30,16 @@ data "aws_ami" "ubuntu" {
 #    private key can authenticate. The private key never comes here.
 resource "aws_key_pair" "deployer" {
   key_name   = "deployer-key"
-  public_key = file("~/.ssh/deployer_key.pub") # read from disk at plan time
+  public_key = file(var.ssh_public_key_path) # read from disk at plan time
 }
 
 # 3. The EC2 instance itself — a worker placed in the public subnet.
 resource "aws_instance" "app" {
-  ami           = data.aws_ami.ubuntu.id   # <-- reference => "resolve the AMI lookup first"
-  instance_type = "t3.micro"               # Nitro, 2 vCPU, burstable
+  ami           = data.aws_ami.ubuntu.id # <-- reference => "resolve the AMI lookup first"
+  instance_type = var.instance_type      # Nitro, 2 vCPU, burstable (see variables.tf)
 
-  subnet_id              = aws_subnet.public.id          # which room it sits in
-  vpc_security_group_ids = [aws_security_group.web.id]   # its personal firewall
+  subnet_id              = aws_subnet.public.id           # which room it sits in
+  vpc_security_group_ids = [aws_security_group.web.id]    # its personal firewall
   key_name               = aws_key_pair.deployer.key_name # which key can SSH in
 
   # Boot script. Terraform reads the file and passes it as cloud-init data;

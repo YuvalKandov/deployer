@@ -8,19 +8,19 @@
 
 # 1. The VPC — an isolated virtual network. Everything else lives inside it.
 resource "aws_vpc" "main" {
-  cidr_block           = "10.0.0.0/16" # 65,536 private IPs to carve subnets from
+  cidr_block           = var.vpc_cidr # 65,536 private IPs to carve subnets from
   enable_dns_support   = true
-  enable_dns_hostnames = true          # needed for the EC2 instance to get a public DNS name
+  enable_dns_hostnames = true # needed for the EC2 instance to get a public DNS name
 
   tags = { Name = "deployer-vpc" }
 }
 
 # 2. Public subnet — one slice of the VPC's range, pinned to a single AZ.
 resource "aws_subnet" "public" {
-  vpc_id                  = aws_vpc.main.id # <-- reference => "build the VPC first"
-  cidr_block              = "10.0.1.0/24"   # 256 IPs inside the VPC range
-  availability_zone       = "eu-central-1a"
-  map_public_ip_on_launch = true            # instances here get a public IP automatically
+  vpc_id                  = aws_vpc.main.id        # <-- reference => "build the VPC first"
+  cidr_block              = var.public_subnet_cidr # 256 IPs inside the VPC range
+  availability_zone       = var.availability_zone
+  map_public_ip_on_launch = true # instances here get a public IP automatically
 
   tags = { Name = "deployer-public-subnet" }
 }
@@ -37,7 +37,7 @@ resource "aws_route_table" "public" {
   vpc_id = aws_vpc.main.id
 
   route {
-    cidr_block = "0.0.0.0/0" # all non-VPC-internal traffic...
+    cidr_block = "0.0.0.0/0"                  # all non-VPC-internal traffic...
     gateway_id = aws_internet_gateway.main.id # ...exits via the internet gateway
   }
 
@@ -59,13 +59,36 @@ resource "aws_security_group" "web" {
   description = "Allow SSH and app/monitoring ports"
   vpc_id      = aws_vpc.main.id
 
+  # --- Admin / shell access: locked to a single operator IP ---
+  # SSH and the monitoring UIs are management surfaces. They expose a login
+  # prompt, internal metrics, and dashboards with their own (un-hardened) auth.
+  # No reason the whole internet should reach them, so they're scoped to my IP.
+
   ingress {
-    description = "SSH"
+    description = "SSH (operator only)"
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"] # TODO(Step 4): restrict to my IP only — see note below
+    cidr_blocks = [var.my_ip_cidr] # least privilege: one host, not 0.0.0.0/0
   }
+
+  ingress {
+    description = "Grafana (admin UI, operator only)"
+    from_port   = 3000
+    to_port     = 3000
+    protocol    = "tcp"
+    cidr_blocks = [var.my_ip_cidr]
+  }
+
+  ingress {
+    description = "Prometheus (admin UI, operator only)"
+    from_port   = 9090
+    to_port     = 9090
+    protocol    = "tcp"
+    cidr_blocks = [var.my_ip_cidr]
+  }
+
+  # --- Public app surface: meant to be seen by anyone (recruiters, demo) ---
 
   ingress {
     description = "HTTP"
@@ -79,22 +102,6 @@ resource "aws_security_group" "web" {
     description = "Flask app"
     from_port   = 5000
     to_port     = 5000
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  ingress {
-    description = "Grafana"
-    from_port   = 3000
-    to_port     = 3000
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  ingress {
-    description = "Prometheus"
-    from_port   = 9090
-    to_port     = 9090
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
