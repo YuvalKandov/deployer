@@ -1,0 +1,5 @@
+# Dev + CI tooling. Installed in the pipeline and locally — NEVER in the
+# production image. Pulls in the runtime deps too via the -r include below.
+-r requirements.txt
+pytest==8.3.3
+ruff==0.8.4
