@@ -1,0 +1,42 @@
+name: CI/CD
+
+# WHEN this pipeline runs.
+#  - push to main        → the real integration event (and later, the deploy)
+#  - pull_request to main → verify a branch BEFORE it merges, so main stays green
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint-and-test:
+    name: Lint & Test
+    runs-on: ubuntu-latest
+    steps:
+      # Pulls your repo onto the fresh runner. Without this the VM is empty —
+      # it does NOT have your code by default.
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      # Installs Python and caches the pip download dir keyed on the deps file,
+      # so repeat runs skip re-downloading wheels.
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: app/requirements-dev.txt
+
+      - name: Install dependencies
+        run: pip install -r app/requirements-dev.txt
+
+      # Lint first: it's seconds-fast, so fail on style/bug-smell before
+      # spending time running the test suite.
+      - name: Lint with Ruff
+        run: ruff check app/
+
+      # `python -m pytest` (not bare `pytest`) puts the repo root on sys.path,
+      # which is what makes `from app.main import app` resolve.
+      - name: Run tests
+        run: python -m pytest
