@@ -40,3 +40,39 @@ jobs:
       # which is what makes `from app.main import app` resolve.
       - name: Run tests
         run: python -m pytest
+
+  build-and-push:
+    name: Build & Push image
+    runs-on: ubuntu-latest
+    # GATE: this job won't even start unless lint-and-test went green.
+    needs: lint-and-test
+    # Only publish from main. PR runs validate (job above) but must NOT push
+    # images — and PRs from forks can't read secrets anyway.
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      # Authenticates the runner to DockerHub using the encrypted secrets.
+      # The action pipes the token via stdin and masks it in logs.
+      - name: Log in to DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # Buildx is Docker's modern builder — recommended by build-push-action.
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Builds the image from the repo-root Dockerfile and pushes TWO tags:
+      #  - :latest         convenient "newest" pointer (moving target)
+      #  - :<commit sha>    immutable, traces every image to an exact commit
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/deployer:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/deployer:${{ github.sha }}
