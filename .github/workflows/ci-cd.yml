@@ -76,3 +76,71 @@ jobs:
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/deployer:latest
             ${{ secrets.DOCKERHUB_USERNAME }}/deployer:${{ github.sha }}
+
+  deploy:
+    name: Deploy to EC2
+    runs-on: ubuntu-latest
+    # Only deploy an image that was actually built & pushed.
+    needs: build-and-push
+    if: github.ref == 'refs/heads/main'
+    env:
+      AWS_DEFAULT_REGION: eu-central-1
+      SG_ID: ${{ secrets.EC2_SG_ID }}
+    steps:
+      # JUST-IN-TIME ACCESS: SSH (22) is locked to the operator's IP, so the
+      # runner can't reach it. Find THIS runner's public IP and open 22 to just
+      # that /32. Stored in GITHUB_ENV so the revoke step removes the same rule.
+      - name: Open SSH for this runner
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        run: |
+          RUNNER_IP=$(curl -s https://api.ipify.org)
+          echo "Runner public IP: $RUNNER_IP"
+          echo "RUNNER_IP=$RUNNER_IP" >> "$GITHUB_ENV"
+          aws ec2 authorize-security-group-ingress \
+            --group-id "$SG_ID" \
+            --protocol tcp --port 22 \
+            --cidr "$RUNNER_IP/32"
+
+      # Lay the private key down on the runner with strict perms, and pre-seed
+      # the host's public key into known_hosts. In Phase 2 you answered the
+      # "unknown host (yes/no)?" prompt by hand — CI has no human to type "yes",
+      # so ssh-keyscan trusts-on-first-use and writes known_hosts for us.
+      - name: Configure SSH
+        env:
+          SSH_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          HOST: ${{ secrets.EC2_HOST }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$SSH_KEY" > ~/.ssh/deployer_key
+          chmod 600 ~/.ssh/deployer_key
+          ssh-keyscan -H "$HOST" >> ~/.ssh/known_hosts
+
+      # SSH in and roll the container to the new image, pinned by commit SHA.
+      # The image is public on DockerHub, so the box pulls without auth.
+      - name: Deploy container
+        env:
+          HOST: ${{ secrets.EC2_HOST }}
+          IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/deployer:${{ github.sha }}
+        run: |
+          ssh -i ~/.ssh/deployer_key "ubuntu@$HOST" "IMAGE='$IMAGE' bash -s" <<'SCRIPT'
+          set -euo pipefail
+          docker pull "$IMAGE"
+          docker rm -f deployer 2>/dev/null || true
+          docker run -d --name deployer -p 80:5000 --restart unless-stopped "$IMAGE"
+          docker image prune -f
+          SCRIPT
+
+      # if: always() — runs even if the deploy failed, so we NEVER leave port 22
+      # open. Closing the hole is more important than the deploy succeeding.
+      - name: Revoke SSH access
+        if: always()
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        run: |
+          aws ec2 revoke-security-group-ingress \
+            --group-id "$SG_ID" \
+            --protocol tcp --port 22 \
+            --cidr "$RUNNER_IP/32" || true
