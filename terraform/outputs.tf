@@ -14,6 +14,12 @@ output "instance_id" {
   value       = aws_instance.app.id
 }
 
+# The CI deploy job needs this to add/remove its just-in-time port-22 rule.
+output "security_group_id" {
+  description = "ID of the web security group (used by CI for JIT SSH access)"
+  value       = aws_security_group.web.id
+}
+
 # A copy-paste-ready SSH command, built from the live IP. Saves you assembling
 # it by hand and bakes in the right user (ubuntu) and key path.
 output "ssh_command" {
