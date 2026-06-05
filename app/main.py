@@ -4,10 +4,13 @@ from datetime import datetime, timezone
 
 from flask import Flask, jsonify, request
 
+from app.metrics import init_metrics
+
 APP_VERSION = "0.1.0"
 START_TIME = time.monotonic()
 
 app = Flask(__name__)
+init_metrics(app)
 
 
 @app.get("/health")

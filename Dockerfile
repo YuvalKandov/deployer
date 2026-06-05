@@ -25,7 +25,9 @@ COPY --from=builder /opt/venv /opt/venv
 ENV PATH=/opt/venv/bin:$PATH
 
 WORKDIR /app
-COPY --chown=appuser:appgroup app/main.py app/__init__.py ./
+# Copy the source INTO an app/ package dir (not flattened), so the in-container
+# layout matches the repo and `python -m app.main` works the same as locally.
+COPY --chown=appuser:appgroup app/__init__.py app/main.py app/metrics.py ./app/
 
 USER appuser
 
@@ -34,4 +36,4 @@ EXPOSE 5000
 HEALTHCHECK --interval=10s --timeout=3s --start-period=5s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:5000/health').read()" || exit 1
 
-CMD ["python", "main.py"]
+CMD ["python", "-m", "app.main"]
