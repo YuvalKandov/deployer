@@ -1,0 +1,15 @@
+# Grafana datasource provisioning. Grafana reads this on boot and creates the
+# datasource automatically — no manual "Add data source" clicking, fully reproducible.
+
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    type: prometheus
+    uid: deployer-prometheus      # FIXED uid so provisioned dashboards can reference it
+                                  # reliably across rebuilds (vs a random auto-assigned one).
+    access: proxy                 # Grafana's BACKEND queries Prometheus (server-side),
+                                  # not the browser — so 'prometheus:9090' (compose DNS) resolves.
+    url: http://prometheus:9090
+    isDefault: true
+    editable: true

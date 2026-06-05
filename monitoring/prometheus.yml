@@ -1,0 +1,23 @@
+# Prometheus configuration — what to scrape, how often, and which alert rules to load.
+
+global:
+  scrape_interval: 15s      # how often Prometheus pulls /metrics from each target
+  evaluation_interval: 15s  # how often it re-evaluates alerting rules
+
+# Load alerting rules from separate file(s). Keeps scrape config and alert
+# logic cleanly separated.
+rule_files:
+  - "alert.rules.yml"
+
+# Each job describes a set of targets to scrape.
+scrape_configs:
+  # Scrape our Flask app's /metrics endpoint.
+  - job_name: "deployer-app"
+    metrics_path: /metrics      # default is already /metrics, explicit for clarity
+    static_configs:
+      - targets: ["app:5000"]   # 'app' = the service name on the compose network
+
+  # Scrape Prometheus' own internal metrics (it instruments itself).
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]

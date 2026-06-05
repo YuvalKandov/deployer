@@ -1,0 +1,16 @@
+# Grafana dashboard provider. Tells Grafana to load any dashboard JSON found in
+# the configured path on boot (and re-check every updateIntervalSeconds).
+
+apiVersion: 1
+
+providers:
+  - name: deployer
+    orgId: 1
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30     # re-scan the folder for changes every 30s
+    allowUiUpdates: true          # let you tweak in the UI without it being reverted instantly
+    options:
+      # JSON dashboards are mounted here by docker-compose (separate from this
+      # provider file, which lives under /etc/grafana/provisioning/dashboards).
+      path: /var/lib/grafana/dashboards

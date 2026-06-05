@@ -1,0 +1,27 @@
+# Prometheus alerting rules. Prometheus evaluates these every evaluation_interval;
+# when an expression stays true for its `for:` duration, the alert fires.
+
+groups:
+  - name: deployer-alerts
+    rules:
+      # The canonical alert: is the target even up? Prometheus auto-generates an
+      # `up` metric per scrape target — 1 if the last scrape succeeded, 0 if not.
+      - alert: AppDown
+        expr: up{job="deployer-app"} == 0
+        for: 1m                       # must be down 1 full minute -> avoids flapping on a single missed scrape
+        labels:
+          severity: critical
+        annotations:
+          summary: "Deployer app is down"
+          description: "Prometheus has failed to scrape app:5000 for over 1 minute."
+
+      # Tail-latency alert: fire if the p95 request latency exceeds 0.5s for 5m.
+      # histogram_quantile reconstructs the 95th percentile from the bucket counts.
+      - alert: HighRequestLatency
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High p95 latency"
+          description: "p95 request latency has been above 500ms for 5 minutes."
