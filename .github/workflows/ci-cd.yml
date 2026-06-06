@@ -87,6 +87,12 @@ jobs:
       AWS_DEFAULT_REGION: eu-central-1
       SG_ID: ${{ secrets.EC2_SG_ID }}
     steps:
+      # This job runs on its OWN fresh VM (no filesystem shared with the other
+      # jobs), so it needs its own checkout. Required now that we scp the compose
+      # file + monitoring/ off the runner's local disk to the box.
+      - name: Check out code
+        uses: actions/checkout@v4
+
       # JUST-IN-TIME ACCESS: SSH (22) is locked to the operator's IP, so the
       # runner can't reach it. Find THIS runner's public IP and open 22 to just
       # that /32. Stored in GITHUB_ENV so the revoke step removes the same rule.
