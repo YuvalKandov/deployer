@@ -1,7 +1,11 @@
 services:
   app:
-    build: .
-    image: deployer:latest
+    # Base file is production-safe: image-ONLY, no build. The EC2 box receives
+    # just this file, so it can never try to build (it has no source/Dockerfile)
+    # it can only PULL. CI injects APP_IMAGE with the pinned :sha; locally it's
+    # unset and falls back to deployer:latest, which docker-compose.override.yml
+    # builds from source.
+    image: ${APP_IMAGE:-deployer:latest}
     ports:
       - "5000:5000"
     restart: unless-stopped

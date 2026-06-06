@@ -1,0 +1,8 @@
+# LOCAL DEV ONLY. Docker Compose auto-merges this on top of docker-compose.yml
+# for any local `docker compose` command — no flags needed. It is deliberately
+# NOT shipped to the EC2 box (CI scp's only docker-compose.yml), so the box never
+# sees `build:` and can only pull the published image. Here we add the build
+# recipe back so local `docker compose up --build` rebuilds the app from source.
+services:
+  app:
+    build: .

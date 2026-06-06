@@ -117,18 +117,38 @@ jobs:
           chmod 600 ~/.ssh/deployer_key
           ssh-keyscan -H "$HOST" >> ~/.ssh/known_hosts
 
-      # SSH in and roll the container to the new image, pinned by commit SHA.
-      # The image is public on DockerHub, so the box pulls without auth.
-      - name: Deploy container
+      # Ship the files the box needs to run the FULL stack: the compose file + the
+      # monitoring/ config tree (Prometheus & Grafana bind-mount these). Images
+      # come from DockerHub; these CONFIG files come from the repo the runner
+      # already checked out at this exact commit. scp rides the SSH we just set
+      # up — same key, same trusted host. mkdir -p first because scp won't
+      # reliably create the destination dir, and -p is idempotent on re-deploys.
+      # NOTE: docker-compose.override.yml is intentionally NOT copied — that's
+      # what keeps `build:` off the box (pull-only).
+      - name: Copy stack to EC2
         env:
           HOST: ${{ secrets.EC2_HOST }}
-          IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/deployer:${{ github.sha }}
         run: |
-          ssh -i ~/.ssh/deployer_key "ubuntu@$HOST" "IMAGE='$IMAGE' bash -s" <<'SCRIPT'
+          ssh -i ~/.ssh/deployer_key "ubuntu@$HOST" "mkdir -p ~/deployer"
+          scp -i ~/.ssh/deployer_key -r \
+            docker-compose.yml monitoring \
+            "ubuntu@$HOST:~/deployer/"
+
+      # Bring up the whole stack with compose. APP_IMAGE fills the ${APP_IMAGE}
+      # placeholder in the base file, pinning the app to the exact image this
+      # commit built & tested. `pull` then `up -d` makes the fetch explicit and
+      # observable in logs; --remove-orphans drops containers for services no
+      # longer in the compose file. The box can only pull (no build: in base).
+      - name: Deploy stack
+        env:
+          HOST: ${{ secrets.EC2_HOST }}
+          APP_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/deployer:${{ github.sha }}
+        run: |
+          ssh -i ~/.ssh/deployer_key "ubuntu@$HOST" "APP_IMAGE='$APP_IMAGE' bash -s" <<'SCRIPT'
           set -euo pipefail
-          docker pull "$IMAGE"
-          docker rm -f deployer 2>/dev/null || true
-          docker run -d --name deployer -p 80:5000 --restart unless-stopped "$IMAGE"
+          cd ~/deployer
+          docker compose pull
+          docker compose up -d --remove-orphans
           docker image prune -f
           SCRIPT
 
