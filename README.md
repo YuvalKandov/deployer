@@ -124,6 +124,12 @@ On every push to `main` (PRs run the first job only - they validate but never de
 
 ## Monitoring
 
+<a href="docs/screenshots/grafana-dashboard.png">
+  <img src="docs/screenshots/grafana-dashboard.png" alt="Grafana Deployer dashboard under load" width="520">
+</a>
+
+<sub>*The Grafana dashboard under synthetic load — request rate, p95 latency per endpoint, and a per-endpoint breakdown (incl. `/process` 4xx). Provisioned from git. Click to enlarge.*</sub>
+
 - **Prometheus** scrapes the app's `/metrics` every 15s over the Compose network and evaluates alert rules:
   - `AppDown` - `up == 0` for 1m (the `for:` clause suppresses transient blips).
   - `HighRequestLatency` - p95 latency > 0.5s for 5m.
